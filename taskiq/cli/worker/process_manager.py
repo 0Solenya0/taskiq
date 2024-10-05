@@ -44,7 +44,7 @@ class ReloadAllAction(ProcessActionBase):
         """
         for worker_id in range(workers_num):
             action_queue.put(ReloadOneAction(worker_num=worker_id, is_reload_all=True))
-            worker = workers[self.worker_num]
+            worker = workers[worker_id]
             try:
                 worker.terminate()
             except ValueError:
