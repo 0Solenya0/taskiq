@@ -25,6 +25,19 @@ logger = logging.getLogger("taskiq.process-manager")
 class ProcessActionBase:
     """Base for all process actions. Used for types."""
 
+@dataclass
+class WaitZombieWorkersAction(ProcessActionBase):
+    """This action waits for worker to shutdown."""
+
+    def handle(
+        zombie_workers: List[Process],
+    ) -> None:
+        """
+        Handle wait worker action.
+        """
+        for worker in zombie_workers:
+            worker.join()
+        zombie_workers.clear()
 
 @dataclass
 class ReloadAllAction(ProcessActionBase):
@@ -49,7 +62,7 @@ class ReloadAllAction(ProcessActionBase):
                 worker.terminate()
             except ValueError:
                 logger.debug(f"Process {worker.name} is already terminated.")
-
+        action_queue.put(WaitZombieWorkersAction())
 
 
 @dataclass
@@ -64,6 +77,7 @@ class ReloadOneAction(ProcessActionBase):
         workers: List[Process],
         args: WorkerArgs,
         worker_func: Callable[[WorkerArgs], None],
+        zombie_workers: List[Process],
     ) -> None:
         """
         This action reloads a single process.
@@ -81,7 +95,7 @@ class ReloadOneAction(ProcessActionBase):
         except ValueError:
             logger.debug(f"Process {worker.name} is already terminated.")
         # Waiting worker shutdown.
-        worker.join()
+        zombie_workers.append(worker)
         event: EventType = Event()
         new_process = Process(
             target=worker_func,
@@ -165,6 +179,7 @@ class ProcessManager:
     ) -> None:
         self.worker_function = worker_function
         self.action_queue: "Queue[ProcessActionBase]" = Queue(-1)
+        self.zombie_workers: List[Process] = []
         self.args = args
         if args.reload and observer is not None:
             observer.schedule(
@@ -268,7 +283,7 @@ class ProcessManager:
                     # If we just reloaded this worker, skip handling.
                     if action.worker_num in reloaded_workers:
                         continue
-                    action.handle(self.workers, self.args, self.worker_function)
+                    action.handle(self.workers, self.args, self.worker_function, self.zombie_workers)
                     reloaded_workers.add(action.worker_num)
                 elif isinstance(action, ShutdownAction):
                     logger.debug("Process manager closed, killing workers.")
@@ -276,6 +291,8 @@ class ProcessManager:
                         if worker.pid:
                             os.kill(worker.pid, signal.SIGINT)
                     return None
+                elif isinstance(action, WaitZombieWorkersAction):
+                    action.handle(self.zombie_workers)
 
             for worker_num, worker in enumerate(self.workers):
                 if not worker.is_alive():
