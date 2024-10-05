@@ -331,16 +331,20 @@ class Receiver:
         logger.info("Listening started.")
         queue: "asyncio.Queue[Union[bytes, AckableMessage]]" = asyncio.Queue()
 
-        async with asyncio.TaskGroup() as gr:
-            prefetcher = gr.create_task(self.prefetcher(queue))
-            runner = gr.create_task(self.runner(queue))
+        prefetcher = asyncio.create_task(self.prefetcher(queue))
+        runner = asyncio.create_task(self.runner(queue))
 
-            # Propagate cancellation to the prefetcher & runner
-            def _cancel(*_: Any) -> None:
-                prefetcher.cancel()
+        # Propagate cancellation to the prefetcher & runner
+        def _cancel(*_: Any) -> None:
+            prefetcher.cancel()
 
-            signal.signal(signal.SIGINT, _cancel)
-            signal.signal(signal.SIGTERM, _cancel)
+        signal.signal(signal.SIGINT, _cancel)
+        signal.signal(signal.SIGTERM, _cancel)
+
+        try:
+            await asyncio.gather(prefetcher, runner)
+        except asyncio.CancelledError:
+            pass
 
         if self.on_exit is not None:
             self.on_exit(self)
