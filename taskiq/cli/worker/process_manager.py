@@ -30,6 +30,7 @@ class WaitZombieWorkersAction(ProcessActionBase):
     """This action waits for worker to shutdown."""
 
     def handle(
+        self,
         zombie_workers: List[Process],
     ) -> None:
         """
