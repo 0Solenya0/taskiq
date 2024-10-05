@@ -331,7 +331,7 @@ class Receiver:
         logger.info("Listening started.")
         queue: "asyncio.Queue[Union[bytes, AckableMessage]]" = asyncio.Queue()
 
-        async with asyncio.create_task_group() as gr:
+        async with asyncio.TaskGroup() as gr:
             prefetcher = gr.create_task(self.prefetcher(queue))
             runner = gr.create_task(self.runner(queue))
 
