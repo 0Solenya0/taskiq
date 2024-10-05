@@ -32,20 +32,24 @@ class ReloadAllAction(ProcessActionBase):
 
     def handle(
         self,
+        workers: List[Process],
         workers_num: int,
         action_queue: "Queue[ProcessActionBase]",
     ) -> None:
         """
         Handle reload all action.
 
-        This action sends N reloadOne actions in a queue,
-        where N is a number of worker processes.
-
         :param workers_num: number of currently active workers.
         :param action_queue: queue to send events to.
         """
         for worker_id in range(workers_num):
             action_queue.put(ReloadOneAction(worker_num=worker_id, is_reload_all=True))
+            worker = workers[self.worker_num]
+            try:
+                worker.terminate()
+            except ValueError:
+                logger.debug(f"Process {worker.name} is already terminated.")
+
 
 
 @dataclass
@@ -248,6 +252,7 @@ class ProcessManager:
                 if isinstance(action, ReloadAllAction):
                     action.handle(
                         workers_num=len(self.workers),
+                        workers=self.workers,
                         action_queue=self.action_queue,
                     )
                 elif isinstance(action, ReloadOneAction):
