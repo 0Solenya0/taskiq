@@ -331,15 +331,16 @@ class Receiver:
         logger.info("Listening started.")
         queue: "asyncio.Queue[Union[bytes, AckableMessage]]" = asyncio.Queue()
 
-        async with anyio.create_task_group() as gr:
-            gr.start_soon(self.prefetcher, queue)
-            gr.start_soon(self.runner, queue)
+        async with asyncio.create_task_group() as gr:
+            prefetcher = gr.create_task(self.prefetcher(queue))
+            runner = gr.create_task(self.runner(queue))
 
             # Propagate cancellation to the prefetcher & runner
             def _cancel(*_: Any) -> None:
-                gr.cancel_scope.cancel()
+                prefetcher.cancel()
 
             signal.signal(signal.SIGINT, _cancel)
+            signal.signal(signal.SIGTERM, _cancel)
 
         if self.on_exit is not None:
             self.on_exit(self)

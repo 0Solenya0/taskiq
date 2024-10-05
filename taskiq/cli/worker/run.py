@@ -148,6 +148,7 @@ def start_listen(args: WorkerArgs) -> None:
             loop.run_until_complete(receiver.listen())
     except KeyboardInterrupt:
         logger.warning("Worker process interrupted.")
+    finally:
         loop.run_until_complete(shutdown_broker(broker, args.shutdown_timeout))
 
 
